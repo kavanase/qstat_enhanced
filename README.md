@@ -9,8 +9,10 @@ Thomas), via `qstat_enhanced`, or with Imperial
 College's HPC systems (CX1/CX2), via
 `qstat_with_cpus_elaptime`.
 
+Could likely be very simply modified to work with other HPC systems too.
+
 ## Implementation
-### UCL HPC
+### UCL HPC (Sun Grid Engine (SGE) Job Scheduler)
 ```
 $ q
 
@@ -20,7 +22,7 @@ Job ID   Priority           Job Name           Status   CPUs   State    Elap_Tim
 42633    0.00000    CdonTe222Antisitea0.345    pending  240    hqw     Fuck all pal  24.00 hours
 ```
 
-### ICL HPC
+### ICL HPC (PBS Job Scheduler)
 ```
 $ q
 
@@ -34,6 +36,7 @@ Job ID     Class          Job Name        Status   CPUs    RTime     Comment
 ```bash
 git clone https://github.com/kavanase/qstat_enhanced.git
 # For UCL HPC:
+pip install xmltodict # qstat_enhanced dependency
 echo "alias q=/path/to/qstat_enhanced/bin/qstat_enhanced" >> ~/.bashrc
 # or for ICL HPC:
 echo "alias q=/path/to/qstat_enhanced/bin/qstat_with_cpus_elaptime" >> ~/.bashrc
@@ -70,3 +73,6 @@ echo " Job Num     Finish Time    CPUs  Runtime                    Working Direc
 echo "--------- ----------------- ---- --------- --------------------------------------------------"
 tail -5 ~/job_log
  ```
+
+### Acknowledgement
+Several of the functions in `qstat_enhanced` are based on the [qstat](https://github.com/relleums/qstat) repository by [relleums](https://github.com/relleums).
