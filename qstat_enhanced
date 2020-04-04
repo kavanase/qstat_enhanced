@@ -1,0 +1,130 @@
+#!/usr/bin/env python3
+# Sean Kavanagh, UCL & Imperial College London 2020
+import time
+import subprocess as sp
+import xmltodict
+
+def qstat2xml(qstat_path='qstat',job_id = None):
+    """
+    Parameters
+    ----------
+    qstat_path : string
+        The path to the qstat executable.
+    job_id : string
+        Job ID number for detailed job info.
+
+    Returns
+    -------
+    qstatxml : string
+        The xml stdout string of the 'qstat -xml' call.
+    """
+    try:
+        if job_id:
+            qstatxml = sp.check_output([qstat_path, '-j', job_id, '-xml'], stderr=sp.STDOUT)
+        else:
+            qstatxml = sp.check_output([qstat_path, '-xml'], stderr=sp.STDOUT)
+    except sp.CalledProcessError as e:
+        print('qstat returncode:', e.returncode)
+        print('qstat std output:', e.output)
+        raise
+    except FileNotFoundError as e:
+        e.message = 'Maybe "' + qstat_path + ' ' + "-xml" + '" is not installed.'
+        raise
+    return qstatxml
+
+def xml2queue_and_job_info(qstatxml):
+    """
+    Parameters
+    ----------
+    qstatxml : string
+        The xml string of the 'qstat -xml' call.
+
+    Returns
+    -------
+    q_info : list
+        A list of jobs in 'queue_info'. Jobs are dictionaries with both string
+        keys and string names.
+    j_info : list
+        A list of jobs in 'job_info'.
+    """
+    x = xmltodict.parse(qstatxml)
+    q_info = []
+    if x['job_info']['queue_info']:
+        for j in x['job_info']['queue_info']['job_list']:
+            try:
+                q_info.append(dict(j))
+            except:
+                q_info.append(dict(x['job_info']['queue_info']['job_list']))
+                break
+    j_info = []
+    if x['job_info']['job_info']:
+        for j in x['job_info']['job_info']['job_list']:
+            try:
+                j_info.append(dict(j))
+            except:
+                j_info.append(dict(x['job_info']['job_info']['job_list']))
+                break
+    return q_info, j_info
+
+def qstat(qstat_path='qstat'):
+    """
+    Parameters
+    ----------
+    qstat_path : string
+        The path to the qstat executable.
+
+    Returns
+    -------
+    queue_info : list
+        A list of jobs in 'queue_info'. Jobs are dictionaries with both string
+        keys and string names.
+    job_info : list
+        A list of jobs in 'job_info'.
+    """
+    xml = qstat2xml(qstat_path=qstat_path)
+    return xml2queue_and_job_info(xml)
+
+def time_used(j,fmt):
+        try:
+            start = j["JAT_start_time"].split(":")
+        except:
+            start = False
+        if start:
+            if (time.localtime().tm_mon-int(start[0][-8:-6])) > 0:
+# If new month, just add 24 hours
+# (works because pretty much all UCL HPC jobs less than 48h)
+                elapsed_time = 24 + time.localtime().tm_mday * 24 \
+                            + (time.localtime().tm_hour-int(start[0][-2:])) \
+                            + (time.localtime().tm_min-int(start[1])) / 60
+            else:
+                elapsed_time = (time.localtime().tm_mday-int(start[0][-5:-3]))*24 \
+                            + (time.localtime().tm_hour-int(start[0][-2:])) \
+                            + (time.localtime().tm_min-int(start[1]))/60
+            if fmt == "string":
+                return str(elapsed_time)[:5]+" hours"
+            elif fmt == "float":
+                return float(elapsed_time)
+        else:
+            if fmt == "string":
+                return 'Fuck all pal'
+            elif fmt == "float":
+                return 0
+
+
+queue_info, job_info = qstat()
+all_jobs = queue_info + job_info
+
+print(' Job ID   Priority           Job Name           Status   CPUs   State    Elap_Time    Remaining')
+print('-------- ---------- -------------------------- -------- ------ ------- ------------- -----------')
+
+for job in all_jobs:
+    walltime_in_seconds = [i['CE_stringval'] for i in
+                           xmltodict.parse(qstat2xml(job_id=str(job["JB_job_number"])))['detailed_job_info'][
+                               'djob_info']['element']['JB_hard_resource_list']['qstat_l_requests'] if
+                           i['CE_name'] == 'h_rt'][0]
+    walltime = float(walltime_in_seconds)/3600
+    elap_time = time_used(job,"float")
+    disp = f'{job["JB_job_number"]:<8} {job["JAT_prio"]:<10} {str(job["JB_name"])[0:26]:<26} {job["@state"]:<8} ' \
+           f'{job["slots"]:<6} {job["state"]:<7} {time_used(job, "string"):<13} ' \
+           f'{f"{walltime - elap_time:.2f} hours":<11}'
+    print(disp)

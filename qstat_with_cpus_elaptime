@@ -1,0 +1,178 @@
+#!/usr/bin/python
+# Sean Kavanagh, UCL & Imperial College London 2020
+# Modified from https://github.com/ImperialCollegeLodnon/rcs-pbs-qstat-wrapper
+import subprocess
+import sys
+import json
+import time
+import re
+
+QSTAT_BINARY = "/opt/pbs/bin/qstat.bin"
+
+
+def passthrough():
+    cmd = [QSTAT_BINARY]
+    cmd.extend(sys.argv[1:])
+    j = subprocess.check_output(cmd)
+    print(j)
+
+def job_name(name):
+    return re.sub(".pbs", "", name)
+
+def get_qstat():
+    j = subprocess.check_output([QSTAT_BINARY, "-f", "-F", "json"])
+    j = json.loads(j)
+    try:
+        return j["Jobs"]
+    except:
+        return {}
+
+def status(s):
+    if s == "Q":
+        return "Queued"
+    if s == "R":
+        return "Running"
+    if s == "H":
+        return "Held"
+    if s == "X" or s == "F":
+        return "Finished"
+    if s == "B":
+        return "Running"
+    if s == "E":
+        return "Finishing"
+    return s
+
+def time_used(j):
+    try:
+        used = j["resources_used"]["walltime"]
+    except:
+        used = "Fuck all"
+    return used
+
+def time_remaining(j):
+    try:
+        used = j["resources_used"]["walltime"].split(":")
+    except:
+        used = [0, 0, 0]
+    total = j["Resource_List"]["walltime"].split(":")
+
+    used = int(used[0]) * 3600 + int(used[1]) * 60 + int(used[2])
+    total = int(total[0]) * 3600 + int(total[1]) * 60 + int(total[2])
+    remaining = total - used
+    end = time.time() + remaining
+
+    if remaining < 60:
+        return "in %s seconds" % (remaining,)
+    if remaining < 3600:
+        return "in %s minutes" % (int(remaining / 60),)
+    if remaining < 86400:
+        day = "today"
+        x = time.strftime("%a", time.localtime(end))
+        y = time.strftime("%a", time.localtime(time.time()))
+        if x != y:
+            day = "tomorrow"
+        return time.strftime(day + " at %H:%M", time.localtime(end))
+    else:
+        return time.strftime("on %a %b %d at %H:%M", time.localtime(end))
+
+def job_class(queue):
+    if "v1_throughp" in queue: return "Throughput"
+    if "v1_large4" in queue: return "Large"
+    if "v1_largem" in queue: return "Large-memory"
+    if "v1_gpu" in queue: return "GPU"
+    if "v1_general" in queue: return "General"
+    if "v1_short" in queue: return "Short"
+    if "v1_single" in queue: return "Single-node"
+    if "v1_multi" in queue: return "Multi-node"
+    if "v1_deb" in queue: return "Debug"
+    if "v1_inter" in queue: return "Interactive"
+    if "v1_long" in queue: return "Long"
+    if "v1_capa" in queue: return "Capability"
+    if "v1_qos" in queue: return "Expedited"  ### this should really be the original class, but this info is lost in the qmove
+    if "pqinteractive" in queue: return "Jupyter"
+    return queue
+
+def print_job(include_user, jid, j, extra):
+    try:
+        if include_user:
+            disp = "%-8s %-10s %-11s %-20s %-8s %-6s %-9s %s" % (
+            job_name(jid), re.sub("@.*$", "", j["Job_Owner"]), job_class(j["queue"]), str(j["Job_Name"])[0:20],
+            status(j["job_state"]), j["Resource_List"]["ncpus"], time_used(j), extra)
+        else:
+            disp = "%-8s %-11s %-20s %-8s %-6s %-9s %s" % (
+            job_name(jid), job_class(j["queue"]), str(j["Job_Name"])[0:20], status(j["job_state"]),
+            j["Resource_List"]["ncpus"], time_used(j), extra)
+        print(disp)
+    except:
+        print(j)
+        print(job_name(jid))
+        print(job_class(j["queue"]))
+        print(j["Job_Name"])
+        print(str(j["Job_Name"])[1:20])
+        print(status(j["job_state"]))
+        print(extra)
+        print(j["Resource_List"]["ncpus"])
+
+def depend(s):
+    s = s.split(",")
+    s = s[0]
+    s = re.sub("^.*:", "", s)
+    s = re.sub(".pbs@pbs", "", s)
+    return "waiting on %s " % (s,)
+
+def print_jobs(jobs):
+    import getpass
+    username = getpass.getuser()
+    include_user = False
+    for j in jobs.keys():
+        a = re.sub("@.*$", "", jobs[j]["Job_Owner"])
+        if a != username:
+            include_user = True
+
+    if len(jobs.keys()):
+        if include_user:
+            print(" Job ID     Class          Job Name        Status   CPUs    RTime     Comment  ")
+            print("-------- ----------- -------------------- -------- ------ --------- -----------")
+
+        else:
+            print(" Job ID     Class          Job Name        Status   CPUs    RTime     Comment  ")
+            print("-------- ----------- -------------------- -------- ------ --------- -----------")
+    for jid in sorted(jobs.keys()):
+        j = jobs[jid]
+        if j[
+            "job_state"] == "H" and "depend" in j:  ### order significant -- H before array check so dep of a held array job is shown
+            print_job(include_user, jid, j, depend(j[
+                                                       "depend"]))  ##re.sub(".pbs@pbs", "",  re.sub("after.*:", "waiting on ", j["depend"] ) ) ) #.split(",")[0] ))
+        elif j["job_state"] == "H" and j["Hold_Types"] == "u":
+            print_job(include_user, jid, j, "Manually held by owner")
+        elif "array" in j:
+            if j["job_state"] == "Q" and "estimated" in j:
+                print_job(include_user, jid, j,
+                          "starting by " + re.sub(":[0-9]+ 202[0-9]", "", j["estimated"]["start_time"]))
+            else:
+                print_job(include_user, jid, j,
+                          re.sub("Expired", "Finished", re.sub("Exiting:0 ", "", j["array_state_count"])))
+        elif j["job_state"] == "Q":
+            if "estimated" in j:
+                print_job(include_user, jid, j,
+                          "starting by " + re.sub(":[0-9]+ 202[0-9]", "", j["estimated"]["start_time"]))
+            else:
+                print_job(include_user, jid, j, "no start time estimate yet")
+        elif j["job_state"] == "R":
+            print_job(include_user, jid, j, "finishing " + time_remaining(j))
+        else:
+            print_job(include_user, jid, j, "XX")
+
+if __name__ == "__main__":
+    try:
+        if len(sys.argv) > 1:
+            passthrough()
+        else:
+            jobs = get_qstat()
+            print_jobs(jobs)
+            sys.exit(0)
+    except SystemExit:
+        sys.exit(0)
+    except:
+        sys.exit(1)
+    sys.exit(0)
