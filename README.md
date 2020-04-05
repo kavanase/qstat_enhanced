@@ -74,5 +74,9 @@ echo "--------- ----------------- ---- --------- -------------------------------
 tail -5 ~/job_log
  ```
 
-### Acknowledgement
+## Acknowledgement
 Several of the functions in `qstat_enhanced` are based on the [qstat](https://github.com/relleums/qstat) repository by [relleums](https://github.com/relleums).
+
+## Disclaimer
+
+This program is not affiliated with UCL or Imperial College London. This program is made available under the MIT License; you are free to modify and use the code, but do so at your own risk.
