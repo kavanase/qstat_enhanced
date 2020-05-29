@@ -57,7 +57,8 @@ as the standard output of `jobhist` gives a lot of irrelevant info
 As of February 2020, job history is no longer maintained by `qstat`
 (previously accessible with `qstat -x`).
 As an alternative, in order to keep track of my jobs, I add these lines of code
-to my PBS jobscripts:
+to my PBS jobscripts:   
+(This is possibly a bit 'extra', but not having a job history is pretty shit, so it is what it is)
 ```bash
 start=$(date +%s)
 mpiexec my_program
@@ -75,8 +76,7 @@ tail -5 ~/job_log
  ```
 
 ## Acknowledgement
-Several of the functions in `qstat_enhanced` are based on the [qstat](https://github.com/relleums/qstat) repository by [relleums](https://github.com/relleums).
+Several of the functions in `qstat_enhanced` are based on the very useful [qstat](https://github.com/relleums/qstat) repository by [relleums](https://github.com/relleums).
 
 ## Disclaimer
-
 This program is not affiliated with UCL or Imperial College London. This program is made available under the MIT License; you are free to modify and use the code, but do so at your own risk.
