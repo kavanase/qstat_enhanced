@@ -37,9 +37,9 @@ Job ID     Class          Job Name        Status   CPUs    RTime     Comment
 git clone https://github.com/kavanase/qstat_enhanced.git
 # For UCL HPC:
 pip install xmltodict # qstat_enhanced dependency
-echo "alias q=/path/to/qstat_enhanced/bin/qstat_enhanced" >> ~/.bashrc
+echo "alias q=/path/to/qstat_enhanced" >> ~/.bashrc
 # or for ICL HPC:
-echo "alias q=/path/to/qstat_enhanced/bin/qstat_with_cpus_elaptime" >> ~/.bashrc
+echo "alias q=/path/to/qstat_with_cpus_elaptime" >> ~/.bashrc
 ```
 
 ## Job History
